@@ -64,7 +64,7 @@ st.write(f"The model equation is: `Close = {a.item():.2f} * Open + {b.item():.2f
 
 # Allow user to modify 'a'
 st.write("You can modify the slope 'a' to see how it affects the regression line.")
-a_modified = st.slider("Modify slope 'a'", -2.0, 2.0, a, 0.01)
+a_modified = st.slider("Modify slope 'a'", -2.0, 2.0, a.item(), 0.01)
 
 # CRISP-DM: Evaluation
 st.header("CRISP-DM: 5. Evaluation")
