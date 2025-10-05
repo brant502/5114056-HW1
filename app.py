@@ -1,141 +1,128 @@
-
 import streamlit as st
-import yfinance as yf
-import pandas as pd
 import numpy as np
+import pandas as pd
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_squared_error, r2_score
 import plotly.graph_objects as go
 
-# CRISP-DM: Business Understanding
-st.title("HW1: Simple Linear Regression with Tesla Stock Price")
-st.header("CRISP-DM: 1. Business Understanding")
+# --- CRISP-DM: Business Understanding ---
+st.title("Simple Linear Regression Explorer")
+st.header("1. Business Understanding")
 st.write("""
-This project aims to solve a simple linear regression problem using Tesla (TSLA) stock data.
-The goal is to predict the closing price of the stock based on its opening price.
-This web application allows for interactive exploration of the linear regression model and its parameters.
+This application demonstrates a simple linear regression problem.
+The goal is to generate synthetic data based on a linear equation (`y = ax + b + noise`)
+and then use a machine learning model to learn the relationship between X and y.
+Users can interactively adjust the parameters used for data generation and modeling to understand their effects.
 """)
 
-# CRISP-DM: Data Understanding
-st.header("CRISP-DM: 2. Data Understanding")
-st.write("We will use Yahoo Finance (`yfinance`) to get the historical stock data for Tesla (TSLA).")
+# --- CRISP-DM: Data Understanding & Preparation (Data Generation) ---
+st.header("2. Data Generation")
+st.write("First, we'll generate our own data. You can control the parameters used to create the dataset.")
 
-# Fetching data
-@st.cache_data
-def load_data(ticker):
-    return yf.download(ticker, start="2020-01-01", end="2023-12-31")
+# Sliders for user input
+st.sidebar.header("Data Generation Controls")
+n_points = st.sidebar.slider("Number of data points (n)", 100, 1000, 500)
+true_a = st.sidebar.slider("True Coefficient 'a' (y = ax + b + noise)", -10.0, 10.0, 2.0, 0.1)
+noise_variance = st.sidebar.slider("Noise Variance (var)", 0, 1000, 100)
 
-data_load_state = st.text('Loading data...')
-tsla_data = load_data('TSLA')
-data_load_state.text('Loading data... done!')
+# Generate synthetic data
+true_b = 50  # Let's define a fixed true intercept
+X = np.linspace(0, 100, n_points)
+noise = np.random.normal(0, np.sqrt(noise_variance), n_points)
+y = true_a * X + true_b + noise
 
-st.subheader("Raw Data")
-st.write(tsla_data.tail())
+# Reshape for scikit-learn
+X_reshaped = X.reshape(-1, 1)
+df = pd.DataFrame({'X': X, 'y': y})
 
-# CRISP-DM: Data Preparation
-st.header("CRISP-DM: 3. Data Preparation")
-st.write("We will use the 'Open' price as our feature (X) and the 'Close' price as our target (y).")
-st.write("You can adjust the number of data points and the level of noise to add to the data.")
+st.subheader("Generated Data Preview")
+st.write(df.head())
 
-# Interactive elements
-n_points = st.slider("Number of data points", 100, len(tsla_data), 250)
-noise_level = st.slider("Noise level", 0.0, 100.0, 0.0)
-
-# Prepare data
-data = tsla_data[['Open', 'Close']].copy().tail(n_points)
-if noise_level > 0:
-    noise = np.random.normal(0, noise_level, data.shape)
-    data += noise
-
-X = data[['Open']]
-y = data['Close']
-
-# CRISP-DM: Modeling
-st.header("CRISP-DM: 4. Modeling")
-st.write("We will use a simple linear regression model from `scikit-learn`.")
+# --- CRISP-DM: Modeling ---
+st.header("3. Modeling")
+st.write("Now, we'll use `scikit-learn`'s `LinearRegression` model to learn the relationship from the generated data.")
 
 # Train the model
 model = LinearRegression()
-model.fit(X, y)
-a = model.coef_[0]
-b = model.intercept_
+model.fit(X_reshaped, y)
 
-st.write(f"The model equation is: `Close = {a.item():.2f} * Open + {b.item():.2f}`")
+# Get learned coefficients
+learned_a = model.coef_[0]
+learned_b = model.intercept_
 
-# Allow user to modify 'a'
-st.write("You can modify the slope 'a' to see how it affects the regression line.")
-a_modified = st.slider("Modify slope 'a'", -2.0, 2.0, a.item(), 0.01)
+st.write(f"**True Equation:** `y = {true_a:.2f} * X + {true_b:.2f} + noise`")
+st.write(f"**Model's Learned Equation:** `y = {learned_a:.2f} * X + {learned_b:.2f}`")
 
-# CRISP-DM: Evaluation
-st.header("CRISP-DM: 5. Evaluation")
-st.write("We will evaluate the model using Mean Squared Error (MSE) and R-squared (R2).")
+# Interactive slider for 'a'
+st.sidebar.header("Model Exploration")
+st.write("You can also manually modify the slope 'a' to see how it affects the evaluation metrics and the plot.")
+modified_a = st.sidebar.slider("Modify slope 'a'", -10.0, 10.0, learned_a, 0.1)
+
+
+# --- CRISP-DM: Evaluation ---
+st.header("4. Evaluation")
+st.write("Let's evaluate how well our model performed and compare it to the manually modified line.")
 
 # Make predictions
-y_pred = model.predict(X)
-y_pred_modified = a_modified * X['Open'] + b
+y_pred_learned = model.predict(X_reshaped)
+y_pred_modified = modified_a * X + learned_b # Use the model's intercept
 
-mse = mean_squared_error(y, y_pred)
-r2 = r2_score(y, y_pred)
+# Calculate metrics
+mse_learned = mean_squared_error(y, y_pred_learned)
+r2_learned = r2_score(y, y_pred_learned)
 
 mse_modified = mean_squared_error(y, y_pred_modified)
 r2_modified = r2_score(y, y_pred_modified)
 
-st.write(f"**Model's Performance:**")
-st.write(f"  - MSE: {mse:.2f}")
-st.write(f"  - R2 Score: {r2:.2f}")
+col1, col2 = st.columns(2)
+with col1:
+    st.write(f"**Learned Model's Performance:**")
+    st.write(f"  - MSE: {mse_learned:.2f}")
+    st.write(f"  - R2 Score: {r2_learned:.2f}")
 
-st.write(f"**Modified Model's Performance (with a={a_modified:.2f}):**")
-st.write(f"  - MSE: {mse_modified:.2f}")
-st.write(f"  - R2 Score: {r2_modified:.2f}")
+with col2:
+    st.write(f"**Modified Model's Performance (a={modified_a:.2f}):**")
+    st.write(f"  - MSE: {mse_modified:.2f}")
+    st.write(f"  - R2 Score: {r2_modified:.2f}")
 
-# Visualization
-st.subheader("Regression Plot")
+
+# --- CRISP-DM: Deployment (Visualization) ---
+st.header("5. Visualization")
+st.write("The plot below shows the original data points and the different regression lines.")
+
 fig = go.Figure()
 
-# Original data
-fig.add_trace(go.Scatter(x=X['Open'], y=y, mode='markers', name='Actual Data'))
+# 1. Scatter plot of the actual generated data
+fig.add_trace(go.Scatter(x=X, y=y, mode='markers', name='Generated Data (y)', marker=dict(opacity=0.6)))
 
-# Model's regression line
-fig.add_trace(go.Scatter(x=X['Open'], y=y_pred, mode='lines', name=f'Model (a={a.item():.2f})'))
+# 2. True regression line
+y_true_line = true_a * X + true_b
+fig.add_trace(go.Scatter(x=X, y=y_true_line, mode='lines', name=f'True Line (a={true_a:.2f})', line=dict(color='red', width=3)))
 
-# Modified regression line
-fig.add_trace(go.Scatter(x=X['Open'], y=y_pred_modified, mode='lines', name=f'Modified (a={a_modified:.2f})', line=dict(dash='dash')))
+# 3. Model's learned regression line
+fig.add_trace(go.Scatter(x=X, y=y_pred_learned, mode='lines', name=f'Learned Line (a={learned_a:.2f})', line=dict(color='green', width=3, dash='dash')))
+
+# 4. Manually modified regression line
+y_pred_modified_line = modified_a * X + learned_b
+fig.add_trace(go.Scatter(x=X, y=y_pred_modified_line, mode='lines', name=f'Modified Line (a={modified_a:.2f})', line=dict(color='orange', width=3, dash='dot')))
+
 
 fig.update_layout(
-    title="Tesla Stock: Open vs. Close Price",
-    xaxis_title="Open Price",
-    yaxis_title="Close Price"
+    title="Exploring Simple Linear Regression",
+    xaxis_title="X",
+    yaxis_title="y",
+    legend_title="Lines"
 )
 st.plotly_chart(fig)
 
-
-# CRISP-DM: Deployment
-st.header("CRISP-DM: 6. Deployment")
+# --- CRISP-DM: Deployment ---
+st.header("6. Deployment")
 st.write("""
-This Streamlit application is a form of deployment. To run this application locally, you need to have Python and the required packages installed.
+This Streamlit application itself is the deployment of the model.
+To run this application locally, ensure you have Python and the required packages installed (`streamlit`, `pandas`, `numpy`, `scikit-learn`, `plotly`).
 
-1.  **Install packages:**
-    ```bash
-    pip install -r requirements.txt
-    ```
-
-2.  **Run the app:**
-    ```bash
-    streamlit run app.py
-    ```
-
-For cloud deployment, you can use services like Streamlit Community Cloud, Heroku, or AWS.
-""")
-
-st.header("Prompt and Process")
-st.write("""
-**Prompt:** "I have a class assignment. Can you help me with a Tesla stock price project? HW1: write python to solve simple linear regression problem, following CRISP-DM steps, with prompt and process, not just code and result. 1. CRISP-DM 2. allow user to modify a in ax+b, noise, number of points 3. streamlit or flask web, framework deployment"
-
-**Process:**
-1.  **Business Understanding:** Defined the project's goal - predicting closing price from opening price.
-2.  **Data Understanding:** Chose `yfinance` to get Tesla's stock data.
-3.  **Data Preparation:** Selected 'Open' and 'Close' columns, and added sliders for user to control data points and noise.
-4.  **Modeling:** Used `scikit-learn`'s `LinearRegression` to build the model.
-5.  **Evaluation:** Calculated MSE and R2 score to evaluate the model. Added a slider for the user to modify the slope 'a' and see the impact on the evaluation metrics.
-6.  **Deployment:** Deployed the model as a Streamlit web app and provided instructions for running it locally and deploying it to the cloud.
+**Run the app with the command:**
+```bash
+streamlit run app.py
+```
 """)
